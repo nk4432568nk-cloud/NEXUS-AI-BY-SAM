@@ -3797,7 +3797,7 @@ const NXCOST = {
 };
 
 // ===== STATE =====
-let GKEY="",TPASS="nexus2560",studentName="",selectedRoom="",selectedGrade="",selectedTopic=null,selectedSubtopic="",missionContentGrade="";
+let GKEY="",TPASS="nexus2569",studentName="",selectedRoom="",selectedGrade="",selectedTopic=null,selectedSubtopic="",missionContentGrade="";
 let phase="intro",qIndex=0,correct=0,wrong=0,answers=[],exerciseData="";
 let mcqLevel=1,consCorrect=0,consWrong=0;
 // ===== NEXUS SEQUENTIAL GUARD (ห้ามข้ามข้อ) =====
@@ -3847,8 +3847,11 @@ window.onload = () => {
   localStorage.setItem('mskey3', GKEY);
   sessionStorage.setItem('_nxkey', GKEY);
 
-  // รหัสผ่านครู (ฝังตายตัว)
-  TPASS  = 'nexus2560';
+  // ── รหัสผ่านครู: ใช้ค่าที่ครูเคยตั้งไว้ก่อน (ถ้ามี) ไม่ทับด้วยค่าเริ่มต้นเสมอ ──
+  //   ★ เดิม hardcode ค่าเริ่มต้นทับทุกครั้งที่โหลดหน้า — ทำให้ครูที่ตั้งรหัสเองแล้ว
+  //     รีเฟรชแล้วรหัสเดิมใช้ไม่ได้ (ต้องกรอก API key ใหม่จึงจะเข้าได้)
+  const _savedPass = localStorage.getItem('msteacher3');
+  TPASS  = (_savedPass && _savedPass.length >= 4) ? _savedPass : 'nexus2569';
   DB_KEY = 'mathscan_' + TPASS;
   localStorage.setItem('msteacher3', TPASS);
 
@@ -4061,7 +4064,7 @@ function saveKey(){
   } else if(!_nxValidWebApp_(SHEETS_WEBAPP_URL)){
     document.getElementById('keyError').textContent='❌ กรุณากรอก Web App URL (ได้จากขั้นตอน Deploy ใน Apps Script — ดูคู่มือติดตั้ง)';return;
   }
-  GKEY=k;TPASS=p||'nexus2560';
+  GKEY=k;TPASS=p||'nexus2569';
   localStorage.setItem('mskey3',k);
   sessionStorage.setItem('_nxkey',k); // backup ใน session ป้องกัน key หาย
   localStorage.setItem('msteacher3',TPASS);
