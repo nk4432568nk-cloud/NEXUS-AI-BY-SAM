@@ -4597,7 +4597,15 @@ async function renderBankInventory(){
     const msg = (data && data.message) ? data.message : 'ข้อมูลไม่ถูกต้อง';
     body.innerHTML = '<div style="color:var(--red);font-size:12px;">❌ ' + _bankInvEsc(msg)
       + (String(msg).includes('Unknown action')
-          ? '<br>⚠️ Apps Script ยังเป็นเวอร์ชันเก่า — ต้องวางโค้ด <b>v5.4</b> แล้ว Deploy → Manage deployments → New version'
+          ? '<br>⚠️ Apps Script ยังเป็นเวอร์ชันเก่า — ต้องวางโค้ด <b>v5.5</b> แล้ว Deploy → Manage deployments → New version'
+          : '')
+      + (String(msg).includes('Unauthorized')
+          ? '<div style="margin-top:8px;padding:9px 12px;background:#fffbeb;border:1.5px solid #fde68a;border-radius:9px;color:#78350f;font-size:12px;line-height:1.7;">'
+            + '<b>รหัสผ่านไม่ตรงกัน</b> ระหว่างหน้าเว็บกับ Apps Script<br>'
+            + 'ตรวจ 2 จุดนี้ให้ตรงกัน:<br>'
+            + '① ใน Apps Script บรรทัดบนสุด: <code>TEACHER_PASSWORD = "..."</code><br>'
+            + '② รหัสที่ใช้เข้าหน้าครูนี้ (ตอนนี้คือ <b>' + _bankInvEsc(String(TPASS||'').slice(0,4) + '••••') + '</b>)<br>'
+            + 'แก้ให้ตรงกันแล้ว <b>Deploy → New version</b> อีกครั้งครับ</div>'
           : '')
       + '</div>';
     return;
