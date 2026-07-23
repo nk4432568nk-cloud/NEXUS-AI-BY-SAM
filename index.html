@@ -6634,6 +6634,7 @@ async function printStudentWorksheet(idx){
     const _wsIsConic = (typeof CONICGEN!=='undefined') && CONICGEN.detect(r.subtopic);
     const _wsIsVenn  = (typeof VENNGEN!=='undefined') && VENNGEN.detect(r.subtopic);
     const _wsIsCons  = (typeof CONSTRUCTGEN!=='undefined') && CONSTRUCTGEN.detect(r.subtopic, r.topic||'');
+    const _wsIsNet   = (typeof NETGEN!=='undefined') && NETGEN.detect(r.subtopic, r.topic||'');
     if(_wsIsCube && typeof CUBEGEN!=='undefined'){
       for(let i=0;i<numQ;i++){
         const lv = i < numQ/3 ? 1 : i < numQ*2/3 ? 2 : 3;
@@ -6645,6 +6646,12 @@ async function printStudentWorksheet(idx){
         const lv = i < numQ/3 ? 1 : i < numQ*2/3 ? 2 : 3;
         const vq = VENNGEN.generateWorksheet(lv, r.grade, r.subtopic);
         if(vq) _wsGenLocal.push({ q:vq.q, ans:vq.ans, explain:vq.ans, svgParams:vq.svgParams, level:vq.level, num:i+1 });
+      }
+    } else if(_wsIsNet){
+      for(let i=0;i<numQ;i++){
+        const lv = i < numQ/3 ? 1 : i < numQ*2/3 ? 2 : 3;
+        const nq = NETGEN.generateWorksheet(lv, r.grade, r.subtopic);
+        if(nq) _wsGenLocal.push({ q:nq.q, ans:nq.ans, explain:nq.ans, svgParams:nq.svgParams, level:nq.level, num:i+1 });
       }
     } else if(_wsIsCons){
       for(let i=0;i<numQ;i++){
@@ -6661,7 +6668,7 @@ async function printStudentWorksheet(idx){
     }
     if(_wsGenLocal.length === numQ){
       // ★ โจทย์ local ไม่เก็บเข้าคลัง — สร้างฟรี+ทันทีอยู่แล้ว (คลังมีไว้ประหยัดโจทย์ AI เท่านั้น)
-      console.log('['+(_wsIsCube?'CUBEGEN':_wsIsVenn?'VENNGEN':_wsIsCons?'CONSTRUCTGEN':'CONICGEN')+'] ✅ ใบงาน '+numQ+' ข้อ สร้าง local — มีภาพครบ ไม่ใช้ AI');
+      console.log('['+(_wsIsCube?'CUBEGEN':_wsIsVenn?'VENNGEN':_wsIsNet?'NETGEN':_wsIsCons?'CONSTRUCTGEN':'CONICGEN')+'] ✅ ใบงาน '+numQ+' ข้อ สร้าง local — มีภาพครบ ไม่ใช้ AI');
       window._wsLocalExercises = _wsGenLocal;   // เก็บไว้ให้ AI loop ข้าม
     }
   }catch(e){ console.warn('[ใบงาน generator] ผิดพลาด → ใช้ AI ปกติ:', e.message); }
@@ -10821,6 +10828,224 @@ const VENNGEN = (() => {
 
 
 // ═══════════════════════════════════════════════════════════════════════
+// svgNet — รูปคลี่ (net) ของรูปเรขาคณิตสามมิติ
+// ═══════════════════════════════════════════════════════════════════════
+// kind: cube | rect_prism | tri_prism | hex_prism
+//       cylinder | cone | sq_pyramid | pent_pyramid
+// วาดด้วยการคำนวณจริง — รูปคลี่ถูกต้องตามตำรา ป.6 ทุกแบบ
+function svgNet(p){
+  p = p || {};
+  const kind = p.kind || 'cube';
+  const W = 330, H = 250;
+  const C = { line:'#1e293b', fill:'#eff6ff', fill2:'#f0fdf4', fill3:'#fef3c7', lbl:'#334155' };
+  const D2R = Math.PI/180;
+
+  const poly = (pts, f) =>
+    `<polygon points="${pts.map(a=>a[0].toFixed(1)+','+a[1].toFixed(1)).join(' ')}" fill="${f||C.fill}" stroke="${C.line}" stroke-width="1.8" stroke-linejoin="round"/>`;
+  const rect = (x,y,w,h,f) =>
+    `<rect x="${x}" y="${y}" width="${w}" height="${h}" fill="${f||C.fill}" stroke="${C.line}" stroke-width="1.8"/>`;
+  const circ = (cx,cy,r,f) =>
+    `<circle cx="${cx}" cy="${cy}" r="${r}" fill="${f||C.fill2}" stroke="${C.line}" stroke-width="1.8"/>`;
+  const cap = (t) =>
+    `<text x="${W/2}" y="${H-8}" text-anchor="middle" font-size="12" font-weight="700" fill="${C.lbl}" font-family="'Sarabun',sans-serif">${t}</text>`;
+  // รูปหลายเหลี่ยมด้านเท่า n ด้าน
+  const ngon = (cx,cy,r,n,rot) => {
+    const a=[]; rot = (rot===undefined? -90 : rot);
+    for(let i=0;i<n;i++){ const t=(rot + i*360/n)*D2R; a.push([cx+r*Math.cos(t), cy+r*Math.sin(t)]); }
+    return a;
+  };
+
+  let g = '', label = '';
+
+  // ── ลูกบาศก์ / ทรงสี่เหลี่ยมมุมฉาก : รูปกากบาท 6 หน้า ──
+  if(kind === 'cube' || kind === 'rect_prism'){
+    const w = kind==='cube' ? 44 : 52, h = 44;
+    const x0 = (W - w*4)/2, y0 = 52;
+    // แถวกลาง 4 หน้า
+    for(let i=0;i<4;i++) g += rect(x0+i*w, y0+h, w, h);
+    // บน-ล่าง ที่หน้าที่ 2
+    g += rect(x0+w, y0, w, h);
+    g += rect(x0+w, y0+h*2, w, h);
+    label = kind==='cube' ? 'รูปคลี่ของลูกบาศก์ (สี่เหลี่ยมจัตุรัส 6 หน้า)'
+                          : 'รูปคลี่ของทรงสี่เหลี่ยมมุมฉาก (สี่เหลี่ยมผืนผ้า 6 หน้า)';
+  }
+
+  // ── ปริซึมสามเหลี่ยม : สี่เหลี่ยม 3 + สามเหลี่ยม 2 ──
+  else if(kind === 'tri_prism'){
+    const w = 56, h = 92, x0 = (W - w*3)/2, y0 = 72;
+    for(let i=0;i<3;i++) g += rect(x0+i*w, y0, w, h);
+    const s = w, hh = s*Math.sqrt(3)/2;
+    const cx = x0 + w*1.5;
+    g += poly([[cx-s/2,y0],[cx+s/2,y0],[cx,y0-hh]], C.fill3);            // สามเหลี่ยมบน
+    g += poly([[cx-s/2,y0+h],[cx+s/2,y0+h],[cx,y0+h+hh]], C.fill3);      // สามเหลี่ยมล่าง
+    label = 'รูปคลี่ของปริซึมสามเหลี่ยม (สี่เหลี่ยม 3 + สามเหลี่ยม 2)';
+  }
+
+  // ── ปริซึมหกเหลี่ยม : สี่เหลี่ยม 6 + หกเหลี่ยม 2 ──
+  else if(kind === 'hex_prism'){
+    const w = 34, h = 78, x0 = (W - w*6)/2, y0 = 84;
+    for(let i=0;i<6;i++) g += rect(x0+i*w, y0, w, h);
+    const r = w*0.95, cx = x0 + w*3;
+    g += poly(ngon(cx, y0-r*0.92, r, 6, 0), C.fill3);
+    g += poly(ngon(cx, y0+h+r*0.92, r, 6, 0), C.fill3);
+    label = 'รูปคลี่ของปริซึมหกเหลี่ยม (สี่เหลี่ยม 6 + หกเหลี่ยม 2)';
+  }
+
+  // ── ทรงกระบอก : สี่เหลี่ยมผืนผ้า 1 + วงกลม 2 ──
+  else if(kind === 'cylinder'){
+    const rw = 168, rh = 74, r = 33;
+    const x0 = (W - rw)/2, y0 = (H - rh)/2 - 4;
+    g += circ(x0 + rw*0.32, y0 - r - 6, r);
+    g += rect(x0, y0, rw, rh);
+    g += circ(x0 + rw*0.32, y0 + rh + r + 6, r);
+    label = 'รูปคลี่ของทรงกระบอก (สี่เหลี่ยมผืนผ้า 1 + วงกลม 2)';
+  }
+
+  // ── กรวย : รูปพัด (เสี้ยววงกลม) 1 + วงกลม 1 ──
+  else if(kind === 'cone'){
+    const cx = 118, cy = 148, R = 104, a1 = -168, a2 = -12;   // เสี้ยววงกลม
+    const P = a => [cx + R*Math.cos(a*D2R), cy + R*Math.sin(a*D2R)];
+    const [x1,y1] = P(a1), [x2,y2] = P(a2);
+    g += `<path d="M ${cx} ${cy} L ${x1.toFixed(1)} ${y1.toFixed(1)} A ${R} ${R} 0 0 1 ${x2.toFixed(1)} ${y2.toFixed(1)} Z" fill="${C.fill}" stroke="${C.line}" stroke-width="1.8" stroke-linejoin="round"/>`;
+    g += circ(268, 150, 40);
+    label = 'รูปคลี่ของกรวย (รูปพัด 1 + วงกลม 1)';
+  }
+
+  // ── พีระมิดฐานสี่เหลี่ยม : สี่เหลี่ยม 1 + สามเหลี่ยม 4 ──
+  else if(kind === 'sq_pyramid'){
+    const s = 62, cx = W/2, cy = 128, t = 48;
+    const L=cx-s/2, R2=cx+s/2, T=cy-s/2, B=cy+s/2;
+    g += rect(L, T, s, s);
+    g += poly([[L,T],[R2,T],[cx,T-t]], C.fill3);      // บน
+    g += poly([[L,B],[R2,B],[cx,B+t]], C.fill3);      // ล่าง
+    g += poly([[L,T],[L,B],[L-t,cy]], C.fill3);       // ซ้าย
+    g += poly([[R2,T],[R2,B],[R2+t,cy]], C.fill3);    // ขวา
+    label = 'รูปคลี่ของพีระมิดฐานสี่เหลี่ยม (สี่เหลี่ยม 1 + สามเหลี่ยม 4)';
+  }
+
+  // ── พีระมิดฐานห้าเหลี่ยม : ห้าเหลี่ยม 1 + สามเหลี่ยม 5 ──
+  else if(kind === 'pent_pyramid'){
+    const cx = W/2, cy = 122, r = 46, t = 46;
+    const base = ngon(cx, cy, r, 5, -90);
+    g += poly(base, C.fill);
+    for(let i=0;i<5;i++){
+      const a = base[i], b = base[(i+1)%5];
+      const mx = (a[0]+b[0])/2, my = (a[1]+b[1])/2;
+      const dx = mx-cx, dy = my-cy, d = Math.hypot(dx,dy)||1;
+      g += poly([a, b, [mx + dx/d*t, my + dy/d*t]], C.fill3);
+    }
+    label = 'รูปคลี่ของพีระมิดฐานห้าเหลี่ยม (ห้าเหลี่ยม 1 + สามเหลี่ยม 5)';
+  }
+
+  else { return null; }
+
+  return `<div style="display:inline-block;background:#fff;border:1.5px solid #cbd5e1;border-radius:12px;padding:10px 12px;">
+    <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" xmlns="http://www.w3.org/2000/svg">
+      <rect width="${W}" height="${H}" fill="#fff"/>${g}${p.hideLabel ? '' : cap(p.caption || label)}
+    </svg>
+  </div>`;
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// NETGEN — โจทย์ "รูปคลี่ของรูปเรขาคณิตสามมิติ" แบบ LOCAL 100%
+// ═══════════════════════════════════════════════════════════════════════
+// หัวข้อนี้ AI วาดรูปคลี่ไม่ได้เลย → ให้ JS วาดเอง ถูกต้องตามตำรา ป.6
+const NETGEN = (() => {
+  const rnd = (a,b) => a + Math.floor(Math.random()*(b-a+1));
+  const pick = arr => arr[rnd(0,arr.length-1)];
+  const shuffle = arr => { const a=arr.slice(); for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; };
+
+  // ข้อมูลรูปทรงแต่ละชนิด
+  const SOLIDS = {
+    cube:         { name:'ลูกบาศก์',                parts:'สี่เหลี่ยมจัตุรัส 6 รูป',            faces:6 },
+    rect_prism:   { name:'ทรงสี่เหลี่ยมมุมฉาก',      parts:'สี่เหลี่ยมผืนผ้า 6 รูป',             faces:6 },
+    tri_prism:    { name:'ปริซึมสามเหลี่ยม',        parts:'สี่เหลี่ยมผืนผ้า 3 รูป และสามเหลี่ยม 2 รูป', faces:5 },
+    hex_prism:    { name:'ปริซึมหกเหลี่ยม',         parts:'สี่เหลี่ยมผืนผ้า 6 รูป และหกเหลี่ยม 2 รูป',  faces:8 },
+    cylinder:     { name:'ทรงกระบอก',              parts:'สี่เหลี่ยมผืนผ้า 1 รูป และวงกลม 2 รูป',      faces:3 },
+    cone:         { name:'กรวย',                   parts:'รูปพัด 1 รูป และวงกลม 1 รูป',              faces:2 },
+    sq_pyramid:   { name:'พีระมิดฐานสี่เหลี่ยม',     parts:'สี่เหลี่ยมจัตุรัส 1 รูป และสามเหลี่ยม 4 รูป', faces:5 },
+    pent_pyramid: { name:'พีระมิดฐานห้าเหลี่ยม',    parts:'ห้าเหลี่ยม 1 รูป และสามเหลี่ยม 5 รูป',       faces:6 }
+  };
+  const KINDS = Object.keys(SOLIDS);
+
+  function detect(subtopic, topicName){
+    const s = String(subtopic||'') + ' ' + String(topicName||'');
+    return /รูปคลี่/.test(s);
+  }
+
+  function generate(level, grade, subtopic){
+    const kind = pick(KINDS);
+    const me = SOLIDS[kind];
+    const others = KINDS.filter(k => k !== kind);
+    const labels = ['ก','ข','ค','ง'];
+    let q, ans, wrongs, why;
+
+    const mode = level <= 1 ? pick(['which','parts']) : pick(['which','parts','faces','reverse']);
+
+    if(mode === 'which'){
+      q = 'จากรูปคลี่ที่กำหนด เมื่อพับขึ้นรูปจะได้รูปเรขาคณิตสามมิติชนิดใด';
+      ans = me.name;
+      wrongs = shuffle(others).slice(0,3).map(k => SOLIDS[k].name);
+      why = 'รูปคลี่นี้ประกอบด้วย' + me.parts + ' ซึ่งเป็นรูปคลี่ของ' + me.name;
+    } else if(mode === 'parts'){
+      q = 'รูปคลี่ที่กำหนดประกอบด้วยรูปเรขาคณิตสองมิติใดบ้าง';
+      ans = me.parts;
+      wrongs = shuffle(others).slice(0,3).map(k => SOLIDS[k].parts);
+      why = 'นับจากรูปคลี่จะได้' + me.parts + ' ซึ่งเป็นของ' + me.name;
+    } else if(mode === 'faces'){
+      q = 'รูปคลี่ที่กำหนด เมื่อพับขึ้นรูปแล้วรูปทรงนั้นมีหน้าทั้งหมดกี่หน้า';
+      ans = me.faces + ' หน้า';
+      const set = new Set([me.faces]);
+      const cand = [me.faces-1, me.faces+1, me.faces+2, me.faces-2, me.faces+3];
+      const w = [];
+      for(const c of cand){ if(w.length>=3) break; if(c>=1 && !set.has(c)){ set.add(c); w.push(c + ' หน้า'); } }
+      wrongs = w;
+      why = 'รูปคลี่นี้เป็นของ' + me.name + ' ซึ่งประกอบด้วย' + me.parts + ' รวม ' + me.faces + ' หน้า';
+    } else {
+      q = 'ข้อใดคือรูปคลี่ของ' + me.name;
+      ans = me.parts;
+      wrongs = shuffle(others).slice(0,3).map(k => SOLIDS[k].parts);
+      why = me.name + 'มีรูปคลี่ประกอบด้วย' + me.parts;
+    }
+
+    // กันตัวเลือกซ้ำ
+    const seen = new Set([ans]);
+    const w3 = [];
+    for(const x of wrongs){ if(w3.length>=3) break; if(!seen.has(x)){ seen.add(x); w3.push(x); } }
+    while(w3.length < 3){ const f = 'รูปอื่น ' + (w3.length+1); if(!seen.has(f)){ seen.add(f); w3.push(f); } }
+
+    const opts = shuffle([ans].concat(w3));
+    const choices = opts.map((o,i) => labels[i] + '. ' + o);
+    const ansIdx = opts.indexOf(ans);
+
+    return {
+      q: q,
+      choices: choices, ans: ansIdx, correctValue: choices[ansIdx],
+      explain: why + ' จึงตอบ ' + choices[ansIdx],
+      skill: subtopic, difficultyLevel: level<=1?'ง่าย':level===2?'ปานกลาง':'ยาก',
+      // โหมด reverse ไม่ต้องโชว์รูป (ถามจากชื่อทรง) — โหมดอื่นโชว์รูปคลี่
+      svgParams: (mode === 'reverse') ? null : { type:'net', kind:kind, hideLabel:true },
+      _netgen: true
+    };
+  }
+
+  // ใบงาน/เล่ม — ให้เขียนตอบพร้อมดูรูปคลี่
+  function generateWorksheet(level, grade, subtopic){
+    const kind = pick(KINDS);
+    const me = SOLIDS[kind];
+    return {
+      q: 'จากรูปคลี่ที่กำหนด จงบอกว่าเมื่อพับขึ้นรูปแล้วได้รูปเรขาคณิตสามมิติชนิดใด และประกอบด้วยรูปสองมิติใดบ้าง',
+      ans: 'ได้ ' + me.name + ' ประกอบด้วย' + me.parts + ' รวม ' + me.faces + ' หน้า',
+      level: level<=1?'พื้นฐาน':level===2?'ประยุกต์':'สูง',
+      svgParams: { type:'net', kind:kind, hideLabel:true },
+      _netgen: true
+    };
+  }
+
+  return { generate, generateWorksheet, detect, SOLIDS };
+})();
+
+// ═══════════════════════════════════════════════════════════════════════
 // CONSTRUCTGEN — โจทย์ "การสร้างทางเรขาคณิต" แบบ LOCAL 100% (ไม่ใช้ AI)
 // ═══════════════════════════════════════════════════════════════════════
 // หัวข้อนี้ AI วาดรูปการสร้างไม่ได้เลย (ไม่มีรอยขีดวงเวียน) → ให้ JS วาดเอง
@@ -11596,6 +11821,7 @@ function buildSVGFromParams(p){
       case 'cube_views':     return svgCubeViews(p.heights||[[1]], p.label||'');
       case 'cube_iso':       return svgCubeIso(p.heights||[[1]], p.label||'');
       case 'construction':   return svgConstruction(p);
+      case 'net':            return svgNet(p);
       case 'cube_views_blank': return (typeof GEO2!=='undefined'&&GEO2.renderCubeWorksheet)?GEO2.renderCubeWorksheet(p.heights||[[1]], p.label||''):svgCubeViews(p.heights||[[1]], p.label||'');
       case 'cuboid':         return svgCuboid(p.w||5, p.h||4, p.d||3, p.label||'');
       case 'pyramid':        return svgPyramid(p.b||5, p.h||6, p.label||'');
@@ -12587,6 +12813,23 @@ async function loadNextQ(){
       }
     }catch(e){ console.warn('[CONSTRUCTGEN] ผิดพลาด → ใช้เส้นทาง AI ปกติ:', e.message); }
   }
+
+  // ═══ [2f] NETGEN — รูปคลี่ของรูปเรขาคณิตสามมิติ: วาดเองใน JS ═══
+  if(typeof NETGEN !== 'undefined' && NETGEN.detect(selectedSubtopic, selectedTopic?selectedTopic.topic:'')){
+    try{
+      const _ng = NETGEN.generate(mcqLevel, selectedGrade, selectedSubtopic);
+      if(_ng && _ng.q && Array.isArray(_ng.choices) && _ng.choices.length === 4){
+        if(!window._qHistory) window._qHistory = [];
+        window._qHistory.push(String(_ng.q).substring(0,40));
+        if(window._qHistory.length > 5) window._qHistory.shift();
+        NXCOST.hit();
+        console.log('[NETGEN] ✅ โจทย์รูปคลี่ + ภาพจริง — ไม่ใช้ AI');
+        rmTyping(); showMCQ(_ng);
+        return;
+      }
+    }catch(e){ console.warn('[NETGEN] ผิดพลาด → ใช้เส้นทาง AI ปกติ:', e.message); }
+  }
+
 
 
   const needsCP = !_chartType && needsCoordinatePlane(selectedSubtopic, selectedTopic.topic);
@@ -14014,19 +14257,21 @@ async function _wbGenSection_(level, count, ctx, statusFn, doneSoFar){
     const _wbIsConic = (typeof CONICGEN!=='undefined') && CONICGEN.detect(selectedSubtopic);
     const _wbIsVenn  = (typeof VENNGEN!=='undefined') && VENNGEN.detect(selectedSubtopic);
     const _wbIsCons  = (typeof CONSTRUCTGEN!=='undefined') && CONSTRUCTGEN.detect(selectedSubtopic, selectedTopic?selectedTopic.topic:'');
+    const _wbIsNet   = (typeof NETGEN!=='undefined') && NETGEN.detect(selectedSubtopic, selectedTopic?selectedTopic.topic:'');
     const _lvNum = level==='พื้นฐาน'?1:level==='ประยุกต์'?2:3;
-    while(out.length < count && (_wbIsCube || _wbIsConic || _wbIsVenn || _wbIsCons)){
+    while(out.length < count && (_wbIsCube || _wbIsConic || _wbIsVenn || _wbIsCons || _wbIsNet)){
       const gq = _wbIsCube ? CUBEGEN.generateWorksheet(_lvNum, selectedGrade, selectedSubtopic)
                : _wbIsVenn ? VENNGEN.generateWorksheet(_lvNum, selectedGrade, selectedSubtopic)
+               : _wbIsNet  ? NETGEN.generateWorksheet(_lvNum, selectedGrade, selectedSubtopic)
                : _wbIsCons ? CONSTRUCTGEN.generateWorksheet(_lvNum, selectedGrade, selectedSubtopic)
                            : CONICGEN.generate(_lvNum, selectedGrade, selectedSubtopic);
       if(!gq) break;
       out.push({ level:level, q:gq.q, ans:(gq.ans!==undefined?gq.ans:gq.correctValue), svgParams:gq.svgParams, _cubegen:true });
       recentStems.push(String(gq.q).substring(0,35));
     }
-    if(out.length >= count && (_wbIsCube||_wbIsConic||_wbIsVenn||_wbIsCons)){
+    if(out.length >= count && (_wbIsCube||_wbIsConic||_wbIsVenn||_wbIsCons||_wbIsNet)){
       // ★ โจทย์ local ไม่เก็บเข้าคลัง — สร้างฟรี+ทันทีอยู่แล้ว
-      console.log('['+(_wbIsCube?'CUBEGEN':_wbIsVenn?'VENNGEN':_wbIsCons?'CONSTRUCTGEN':'CONICGEN')+'] ✅ เล่ม section "'+level+'" '+count+' ข้อ สร้าง local — มีภาพครบ ไม่ใช้ AI');
+      console.log('['+(_wbIsCube?'CUBEGEN':_wbIsVenn?'VENNGEN':_wbIsNet?'NETGEN':_wbIsCons?'CONSTRUCTGEN':'CONICGEN')+'] ✅ เล่ม section "'+level+'" '+count+' ข้อ สร้าง local — มีภาพครบ ไม่ใช้ AI');
     }
   }catch(e){ console.warn('[เล่ม generator] ผิดพลาด → ใช้ AI:', e.message); }
 
