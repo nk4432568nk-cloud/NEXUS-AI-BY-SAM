@@ -1366,7 +1366,14 @@ function convertAllMathInDOM(selector = '[data-math]') {
           <option value="live">🔴 คาบนี้ (2 ชม.ล่าสุด)</option>
           <option value="today">วันนี้</option>
           <option value="week">7 วันล่าสุด</option>
+          <option value="custom">⏱ กำหนดช่วงเวลาเอง</option>
         </select>
+        <span id="ideCustomTime" style="display:none;align-items:center;gap:4px;font-size:11.5px;color:#bfdbfe;font-weight:700;">
+          <input type="date" id="ideDate" onchange="applyCustomTime('ide')" style="padding:4px 6px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-family:'Sarabun',sans-serif;font-size:11.5px;font-weight:700;color:#0f172a;cursor:pointer;">
+          <input type="time" id="ideFrom" onchange="applyCustomTime('ide')" style="padding:4px 6px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-family:'Sarabun',sans-serif;font-size:11.5px;font-weight:700;color:#0f172a;cursor:pointer;">
+          <span>ถึง</span>
+          <input type="time" id="ideTo" onchange="applyCustomTime('ide')" style="padding:4px 6px;border:1px solid rgba(255,255,255,.3);border-radius:6px;font-family:'Sarabun',sans-serif;font-size:11.5px;font-weight:700;color:#0f172a;cursor:pointer;">
+        </span>
         <span id="ideFilterCount" style="font-size:11.5px;color:#bfdbfe;font-weight:700;white-space:nowrap;"></span>
       </div>
       </div>
@@ -1506,8 +1513,15 @@ function convertAllMathInDOM(selector = '[data-math]') {
           <option value="live">🔴 คาบนี้ (2 ชม.ล่าสุด)</option>
           <option value="today">วันนี้</option>
           <option value="week">7 วันล่าสุด</option>
+          <option value="custom">⏱ กำหนดช่วงเวลาเอง</option>
         </select>
       </label>
+      <span id="dashCustomTime" style="display:none;align-items:center;gap:5px;font-size:11.5px;color:#1e40af;font-weight:700;">
+        <input type="date" id="dashDate" onchange="applyCustomTime('dash')" style="padding:5px 8px;border:1.5px solid #93c5fd;border-radius:8px;font-family:'Sarabun',sans-serif;font-size:12px;font-weight:700;color:#1e40af;cursor:pointer;">
+        <input type="time" id="dashFrom" onchange="applyCustomTime('dash')" style="padding:5px 8px;border:1.5px solid #93c5fd;border-radius:8px;font-family:'Sarabun',sans-serif;font-size:12px;font-weight:700;color:#1e40af;cursor:pointer;">
+        <span>ถึง</span>
+        <input type="time" id="dashTo" onchange="applyCustomTime('dash')" style="padding:5px 8px;border:1.5px solid #93c5fd;border-radius:8px;font-family:'Sarabun',sans-serif;font-size:12px;font-weight:700;color:#1e40af;cursor:pointer;">
+      </span>
 
       <button onclick="resetDashFilters()" title="ล้างตัวกรองทั้งหมด"
         style="padding:6px 11px;background:#fff;border:1.5px solid #cbd5e1;border-radius:8px;font-family:'Sarabun',sans-serif;font-size:11.5px;font-weight:700;color:#64748b;cursor:pointer;white-space:nowrap;">↻ ล้าง</button>
@@ -4787,7 +4801,11 @@ function _dashApplyFilters(all){
   let out = (all||[]).slice();
   if(g  !== '__ALL__') out = out.filter(r => String(r.grade||'').trim() === g);
   if(rm !== '__ALL__') out = out.filter(r => String(r.room ||'').trim() === rm);
-  if(tf !== '__ALL__'){
+  if(tf === 'custom'){
+    // ★ ช่วงเวลาที่ครูกำหนดเอง เช่น 08:30–09:30 ของวันที่เลือก
+    const rg = _dashCustomRange();
+    if(rg) out = out.filter(r => { const t = _dashTimeOf(r); return isNaN(t) ? false : (t >= rg.from && t <= rg.to); });
+  } else if(tf !== '__ALL__'){
     const now = Date.now();
     let cutoff = 0;
     if(tf === 'live')  cutoff = now - 2*60*60*1000;              // 2 ชั่วโมงล่าสุด (คาบนี้)
@@ -4796,6 +4814,63 @@ function _dashApplyFilters(all){
     out = out.filter(r => { const t = _dashTimeOf(r); return isNaN(t) ? false : t >= cutoff; });
   }
   return out;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// ★ ช่วงเวลาที่กำหนดเอง (เช่น คาบเรียน 08:30–09:30)
+// ═══════════════════════════════════════════════════════════════
+function _pad2(n){ return (n<10?'0':'') + n; }
+function _todayStr(){ const d=new Date(); return d.getFullYear()+'-'+_pad2(d.getMonth()+1)+'-'+_pad2(d.getDate()); }
+
+// ค่าเริ่มต้น: วันนี้ ชั่วโมงปัจจุบัน (ปัดลง) ถึงอีก 1 ชั่วโมง
+function _dashCustomDefaults(){
+  const d = new Date();
+  const h = d.getHours();
+  return { date:_todayStr(), from:_pad2(h)+':00', to:_pad2(Math.min(23,h+1))+':00' };
+}
+
+// อ่านช่วงเวลาที่ตั้งไว้ → คืน {from, to} เป็น ms
+function _dashCustomRange(){
+  const st = window._dashTimeCustom;
+  if(!st || !st.date || !st.from || !st.to) return null;
+  const f = new Date(st.date + 'T' + st.from + ':00').getTime();
+  let   t = new Date(st.date + 'T' + st.to   + ':59').getTime();
+  if(isNaN(f) || isNaN(t)) return null;
+  if(t < f) t = f + 60*60*1000;          // ถ้าเวลาสิ้นสุดน้อยกว่าเริ่ม ให้ +1 ชม.
+  return { from:f, to:t };
+}
+
+// เขียนค่าลงช่องทั้ง 2 แถบ + แสดง/ซ่อนตามตัวเลือก
+function _dashSyncCustomTime(){
+  if(!window._dashTimeCustom) window._dashTimeCustom = _dashCustomDefaults();
+  const st = window._dashTimeCustom;
+  [['dashDate','dashFrom','dashTo','dashCustomTime','dashTimeFilter'],
+   ['ideDate','ideFrom','ideTo','ideCustomTime','ideTimeFilter']].forEach(function(ids){
+    const dEl=document.getElementById(ids[0]), fEl=document.getElementById(ids[1]),
+          tEl=document.getElementById(ids[2]), box=document.getElementById(ids[3]),
+          sel=document.getElementById(ids[4]);
+    if(dEl) dEl.value = st.date;
+    if(fEl) fEl.value = st.from;
+    if(tEl) tEl.value = st.to;
+    if(box) box.style.display = (sel && sel.value === 'custom') ? 'flex' : 'none';
+  });
+}
+
+// ครูปรับช่องเวลา → เก็บค่าแล้ววาดใหม่
+function applyCustomTime(which){
+  const p = (which === 'ide') ? ['ideDate','ideFrom','ideTo'] : ['dashDate','dashFrom','dashTo'];
+  const dEl=document.getElementById(p[0]), fEl=document.getElementById(p[1]), tEl=document.getElementById(p[2]);
+  window._dashTimeCustom = {
+    date: (dEl && dEl.value) || _todayStr(),
+    from: (fEl && fEl.value) || '08:00',
+    to:   (tEl && tEl.value) || '09:00'
+  };
+  // ถ้ายังไม่ได้เลือกโหมด custom ให้เลือกให้เลย
+  ['dashTimeFilter','ideTimeFilter'].forEach(function(id){
+    const e=document.getElementById(id); if(e) e.value='custom';
+  });
+  _dashSyncCustomTime();
+  applyDashRoom(false);
 }
 
 // เติมตัวเลือกระดับชั้น + ห้อง (ห้องขึ้นตามระดับชั้นที่เลือก)
@@ -4851,6 +4926,7 @@ function _dashBuildRoomOptions(all){ _dashBuildFilters(all, false); }
 
 function applyDashRoom(gradeChanged){
   if(!gradeChanged) window._dashRoomUserSet = true;   // ครูเลือกห้อง/เวลาเอง
+  try{ _dashSyncCustomTime(); }catch(e){}             // แสดง/ซ่อนช่องเวลาตามโหมด
   window._dashGradeChanged = !!gradeChanged;
   try{ renderDash(); }catch(e){ console.warn('[Dash] กรองข้อมูลไม่สำเร็จ:', e.message); }
   try{ if(window._livePollTimer) renderLiveDash(); }catch(e){}
@@ -4959,7 +5035,11 @@ async function renderDash(){
     const parts = [];
     parts.push(g === '__ALL__' ? 'ทุกระดับ' : g);
     if(rm !== '__ALL__') parts.push('ห้อง ' + rm);
-    const tLbl = {live:'คาบนี้', today:'วันนี้', week:'7 วันล่าสุด'}[tf];
+    let tLbl = {live:'คาบนี้', today:'วันนี้', week:'7 วันล่าสุด'}[tf];
+    if(tf === 'custom'){
+      const st = window._dashTimeCustom;
+      if(st) tLbl = st.date + ' ' + st.from + '–' + st.to + ' น.';
+    }
     if(tLbl) parts.push(tLbl);
     _cntEl.textContent = '📊 ' + parts.join(' · ') + ' — ' + R.length + ' รายการ';
   }
@@ -15138,27 +15218,61 @@ const _RD_CFG = {
   growth:          { toolbar:'grw-toolbar',  countEl:'grw-sel-count',  chkClass:'rd-chk-growth',          rdKey:null,              reRender:()=>{ _reRenderGrowth(); } }
 };
 
-// ── รายชื่อที่ถูกซ่อนจากตารางการเติบโต (เก็บถาวรในเครื่อง กู้คืนได้) ──
-const NXGROWTH_HIDDEN_KEY = 'nx_growth_hidden_v1';
-function _growthHiddenGet(){
-  try{ return JSON.parse(localStorage.getItem(NXGROWTH_HIDDEN_KEY) || '[]'); }catch(e){ return []; }
+// ═══════════════════════════════════════════════════════════════
+// ★ ลบผลสอบของนักเรียนออกจากฐานข้อมูลจริง (จากตารางการเติบโต)
+// ═══════════════════════════════════════════════════════════════
+// ลบทั้ง 2 ที่: localStorage (เครื่องนี้) + Google Sheets (ฐานข้อมูลกลาง)
+// ⚠️ ถาวร กู้คืนไม่ได้ — จึงมีกล่องยืนยันบอกจำนวนครั้งสอบที่จะหายไปด้วย
+async function _growthDeleteStudents(names){
+  const nameSet = new Set(names.map(n => String(n).trim()));
+
+  // หาผลสอบทั้งหมดของนักเรียนกลุ่มนี้ (ทุกครั้งที่เคยสอบ)
+  const all = (typeof getResults === 'function') ? getResults() : [];
+  const hit = all.filter(r => nameSet.has(String(r.name||'').trim()));
+  if(!hit.length){ alert('ไม่พบผลสอบของนักเรียนที่เลือกครับ'); return; }
+
+  const msg = 'ลบผลสอบของนักเรียน ' + names.length + ' คน ออกจากฐานข้อมูลถาวร?\n\n'
+            + '• จะลบผลสอบทั้งหมด ' + hit.length + ' ครั้ง\n'
+            + '• ลบทั้งในเครื่องนี้และใน Google Sheets\n'
+            + '• ⚠️ กู้คืนไม่ได้\n\n'
+            + names.slice(0,6).join(', ') + (names.length>6 ? ' และอีก ' + (names.length-6) + ' คน' : '');
+  if(!confirm(msg)) return;
+
+  // ── 1) ลบออกจากเครื่อง ──
+  try{
+    const keep = all.filter(r => !nameSet.has(String(r.name||'').trim()));
+    localStorage.setItem(DB_KEY, JSON.stringify(keep));
+  }catch(e){ console.warn('[ลบผลสอบ] localStorage:', e.message); }
+
+  // ── 2) ลบออกจาก Google Sheets ──
+  let sheetMsg = '';
+  if(SHEETS_WEBAPP_URL && SHEETS_WEBAPP_URL !== 'YOUR_APPS_SCRIPT_WEB_APP_URL_HERE'){
+    try{
+      const keys = hit.map(function(r){
+        let ms = '';
+        try{ ms = String(new Date(r.timestamp).getTime()); }catch(e){}
+        return String(r.name||'').trim() + '|' + ms;
+      });
+      await fetch(SHEETS_WEBAPP_URL, {
+        method:'POST', mode:'no-cors',
+        headers:{'Content-Type':'text/plain;charset=utf-8'},
+        body: JSON.stringify({ action:'deleteResults', keys:keys, password:TPASS })
+      });
+      sheetMsg = '\n(ส่งคำสั่งลบไปยัง Google Sheets แล้ว — ต้องใช้ Apps Script เวอร์ชันล่าสุด)';
+    }catch(e){
+      sheetMsg = '\n⚠️ ลบใน Google Sheets ไม่สำเร็จ: ' + e.message;
+    }
+  }
+
+  try{ await renderDash(); }catch(e){}
+  alert('✅ ลบผลสอบของ ' + names.length + ' คน (รวม ' + hit.length + ' ครั้ง) เรียบร้อยแล้วครับ' + sheetMsg);
 }
-function _growthHiddenSet(list){
-  try{ localStorage.setItem(NXGROWTH_HIDDEN_KEY, JSON.stringify(list||[])); }catch(e){}
-}
+
 function _reRenderGrowth(){
   try{
     const R = window._dashResults || (typeof getResults === 'function' ? getResults() : []);
     _renderGrowthLog(calcLearningGrowth(R));
   }catch(e){}
-}
-// ── กู้คืนรายชื่อที่ซ่อนทั้งหมด ──
-function growthRestoreAll(){
-  const hid = _growthHiddenGet();
-  if(!hid.length){ alert('ไม่มีรายการที่ซ่อนไว้ครับ'); return; }
-  if(!confirm('แสดงรายชื่อที่ซ่อนไว้ทั้งหมด ' + hid.length + ' รายการ?')) return;
-  _growthHiddenSet([]);
-  _reRenderGrowth();
 }
 
 function rdUpdateToolbar(type){
@@ -15182,16 +15296,12 @@ function rdDeleteSelected(type){
   const chks = [...document.querySelectorAll('.'+cfg.chkClass+':checked')];
   if(!chks.length){ alert('กรุณาเลือกรายการที่ต้องการลบก่อนครับ'); return; }
 
-  // ★ growth: ข้อมูลคำนวณสดจากผลสอบ — ลบ = ซ่อนชื่อออกจากตารางนี้
-  //   (ไม่ลบผลสอบจริง เพราะระบบอื่นใช้อยู่: ใบงาน/เล่ม/หลักฐาน/รายละเอียดนักเรียน)
+  // ★ growth: ลบผลสอบของนักเรียนคนนั้นออกจากฐานข้อมูลจริง
+  //   (ลบทั้งในเครื่องและใน Google Sheets — ข้อมูลหายถาวร)
   if(type === 'growth'){
     const names = chks.map(c => c.dataset.name).filter(Boolean);
     if(!names.length) return;
-    if(!confirm('ซ่อน ' + names.length + ' รายการออกจากตารางการเติบโต?\n\n• ผลสอบจริงของนักเรียนยังอยู่ครบ ไม่ถูกลบ\n• กดปุ่ม "แสดงที่ซ่อน" เพื่อเรียกคืนได้ตลอด')) return;
-    const hid = _growthHiddenGet();
-    names.forEach(n => { if(hid.indexOf(n) < 0) hid.push(n); });
-    _growthHiddenSet(hid);
-    _reRenderGrowth();
+    _growthDeleteStudents(names);
     return;
   }
 
@@ -15412,24 +15522,17 @@ function _renderRecommendationLog(recs){
 
 function _renderGrowthLog(growths){
   const el = document.getElementById('rd-growth-log');
-  const hidden = _growthHiddenGet();
-  const shown  = (growths||[]).filter(g => hidden.indexOf(g.name) < 0);
-  const restoreBar = hidden.length
-    ? `<div style="margin-top:9px;font-size:12px;color:#94a3b8;">ซ่อนไว้ ${hidden.length} รายการ
-         <button onclick="growthRestoreAll()" style="margin-left:6px;padding:3px 10px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;font-size:11.5px;font-weight:700;color:#475569;cursor:pointer;font-family:'Prompt',sans-serif;">↩ แสดงที่ซ่อน</button>
-       </div>` : '';
+  const shown = (growths||[]).slice();
 
   if(!shown.length){
-    el.innerHTML = '<div style="color:#94a3b8;font-size:13px;">'
-      + (hidden.length ? 'ซ่อนรายการทั้งหมดแล้ว' : 'ต้องมีนักเรียนที่ทำแบบทดสอบมากกว่า 1 ครั้ง')
-      + '</div>' + restoreBar;
+    el.innerHTML = '<div style="color:#94a3b8;font-size:13px;">ต้องมีนักเรียนที่ทำแบบทดสอบมากกว่า 1 ครั้ง</div>';
     return;
   }
 
   el.innerHTML=`
     <div class="rd-del-toolbar" id="grw-toolbar" style="display:none;margin-bottom:8px;padding:8px 12px;background:#fef2f2;border-radius:8px;border:1px solid #fecaca;align-items:center;gap:10px;">
       <span id="grw-sel-count" style="font-size:13px;color:#dc2626;font-weight:600;">เลือก 0 รายการ</span>
-      <button onclick="rdDeleteSelected('growth')" style="padding:5px 14px;background:#dc2626;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;">🗑 ลบที่เลือก</button>
+      <button onclick="rdDeleteSelected('growth')" style="padding:5px 14px;background:#dc2626;color:white;border:none;border-radius:6px;font-size:12px;font-weight:700;cursor:pointer;font-family:'Prompt',sans-serif;" title="ลบผลสอบออกจากฐานข้อมูลถาวร">🗑 ลบผลสอบถาวร</button>
       <button onclick="rdSelectAll('growth',true)" style="padding:5px 12px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Prompt',sans-serif;">เลือกทั้งหมด</button>
       <button onclick="rdSelectAll('growth',false)" style="padding:5px 12px;background:#f1f5f9;border:1px solid #cbd5e1;border-radius:6px;font-size:12px;cursor:pointer;font-family:'Prompt',sans-serif;">ยกเลิก</button>
     </div>
@@ -15453,7 +15556,7 @@ function _renderGrowthLog(growths){
         </div></td>
       </tr>`;
     }).join('')}
-  </tbody></table>${restoreBar}`;
+  </tbody></table>`;
   const tb = document.getElementById('grw-toolbar');
   if(tb) tb.style.display = 'none';
 }
