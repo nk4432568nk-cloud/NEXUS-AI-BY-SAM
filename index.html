@@ -15226,9 +15226,12 @@ const _RD_CFG = {
 async function _growthDeleteStudents(names){
   const nameSet = new Set(names.map(n => String(n).trim()));
 
-  // หาผลสอบทั้งหมดของนักเรียนกลุ่มนี้ (ทุกครั้งที่เคยสอบ)
-  const all = (typeof getResults === 'function') ? getResults() : [];
-  const hit = all.filter(r => nameSet.has(String(r.name||'').trim()));
+  // ★ หาผลสอบจาก "ชุดข้อมูลที่แสดงอยู่จริง" (มาจาก Google Sheets ถ้าเชื่อมอยู่)
+  //   เดิมใช้ getResults() ซึ่งอ่านเฉพาะ localStorage → ไม่เจอชื่อที่ซิงก์มาจาก Sheets
+  const local = (typeof getResults === 'function') ? getResults() : [];
+  const shown = window._dashAllResults || window._dashResults || [];
+  const all   = shown.length ? shown : local;
+  const hit   = all.filter(r => nameSet.has(String(r.name||'').trim()));
   if(!hit.length){ alert('ไม่พบผลสอบของนักเรียนที่เลือกครับ'); return; }
 
   const msg = 'ลบผลสอบของนักเรียน ' + names.length + ' คน ออกจากฐานข้อมูลถาวร?\n\n'
@@ -15238,10 +15241,12 @@ async function _growthDeleteStudents(names){
             + names.slice(0,6).join(', ') + (names.length>6 ? ' และอีก ' + (names.length-6) + ' คน' : '');
   if(!confirm(msg)) return;
 
-  // ── 1) ลบออกจากเครื่อง ──
+  // ── 1) ลบออกจากเครื่อง (ถ้ามีสำเนาในเครื่อง) ──
   try{
-    const keep = all.filter(r => !nameSet.has(String(r.name||'').trim()));
-    localStorage.setItem(DB_KEY, JSON.stringify(keep));
+    if(local.length){
+      const keep = local.filter(r => !nameSet.has(String(r.name||'').trim()));
+      localStorage.setItem(DB_KEY, JSON.stringify(keep));
+    }
   }catch(e){ console.warn('[ลบผลสอบ] localStorage:', e.message); }
 
   // ── 2) ลบออกจาก Google Sheets ──
@@ -15258,7 +15263,9 @@ async function _growthDeleteStudents(names){
         headers:{'Content-Type':'text/plain;charset=utf-8'},
         body: JSON.stringify({ action:'deleteResults', keys:keys, password:TPASS })
       });
-      sheetMsg = '\n(ส่งคำสั่งลบไปยัง Google Sheets แล้ว — ต้องใช้ Apps Script เวอร์ชันล่าสุด)';
+      // รอ Apps Script ประมวลผลสักครู่ ก่อนดึงข้อมูลใหม่ (ไม่งั้นจะเห็นข้อมูลเดิม)
+      await new Promise(function(res){ setTimeout(res, 2500); });
+      sheetMsg = '\n\nหมายเหตุ: ถ้าข้อมูลยังไม่หายหลังกดรีเฟรช แปลว่ายังไม่ได้ Deploy Apps Script เวอร์ชันล่าสุด';
     }catch(e){
       sheetMsg = '\n⚠️ ลบใน Google Sheets ไม่สำเร็จ: ' + e.message;
     }
