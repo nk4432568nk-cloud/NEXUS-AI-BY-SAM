@@ -93,6 +93,11 @@ body{font-family:'Sarabun',sans-serif;background:#f0f4f8;color:var(--text);min-h
 
 /* SELECTORS */
 .grade-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px;}
+    /* ★ ตารางเลือกห้องเรียน 1–25 (5 คอลัมน์ ปุ่มเล็กกว่า grade) */
+    .room-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:7px;margin-top:8px;}
+    .room-btn{padding:11px 4px;background:#f0fdfa;border:2px solid #99f6e4;border-radius:10px;color:#0f766e;font-family:'Prompt',sans-serif;font-size:15px;font-weight:700;text-align:center;cursor:pointer;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
+    .room-btn:hover{background:#ccfbf1;border-color:#2dd4bf;transform:translateY(-1px);}
+    @media(max-width:480px){ .room-grid{grid-template-columns:repeat(4,1fr);gap:6px;} .room-btn{padding:10px 3px;font-size:14px;} }
 .grade-btn{padding:14px 8px;background:#f0f6ff;border:2px solid #bfdbfe;border-radius:11px;color:#1e3a8a;font-family:'Prompt',sans-serif;font-size:16px;font-weight:600;text-align:center;cursor:pointer;transition:all .2s;box-shadow:0 1px 4px rgba(0,0,0,0.06);}
 .grade-btn:hover:not(:disabled){border-color:#1d6aff;background:#dbeafe;color:#1d4ed8;transform:translateY(-2px);}
 .grade-btn:disabled{cursor:not-allowed;}
@@ -9565,15 +9570,23 @@ async function sendText(){
     await delay(300);
     const praGrades = ['ป.1','ป.2','ป.3','ป.4','ป.5','ป.6','ม.1','ม.2','ม.3','ม.4','ม.5','ม.6'];
     addGrid('grade', praGrades, grade=>{
-      selectedGrade=grade; selectedRoom=grade; addMsg('user',grade);
+      selectedGrade=grade; addMsg('user',grade);
       delay(400).then(()=>{
-        addMsg('ai',`ท่านเลือกระดับชั้น **${grade}** แล้วครับ 📚\nกรุณาเลือกหัวข้อที่ต้องการประเมินครับ`);
-        delay(300).then(()=>addGrid('topic',CURRICULUM[grade]||[],topic=>{
-          selectedTopic=topic;addMsg('user',topic.topic);
+        // ★ ขั้นใหม่: เลือกห้องเรียน (1–25) — จำเป็นสำหรับการกรองห้องใน Dashboard
+        addMsg('ai',`ท่านเลือกระดับชั้น **${grade}** แล้วครับ 📚\n\nกรุณาเลือกห้องเรียนของท่านครับ 🏫`);
+        const rooms = Array.from({length:25}, (_,i)=>String(i+1));
+        delay(300).then(()=>addGrid('room', rooms, room=>{
+          selectedRoom = room; addMsg('user','ห้อง '+room);
           delay(400).then(()=>{
-            addMsg('ai',`หัวข้อ **${topic.topic}** ประกอบด้วยเนื้อหาย่อยดังต่อไปนี้ครับ\nกรุณาเลือกหัวข้อย่อยที่ต้องการประเมิน 👇`);
-            delay(300).then(()=>addGrid('subtopic',topic.subs,sub=>{
-              selectedSubtopic=sub;addMsg('user',sub);startQuiz();
+            addMsg('ai',`ท่านอยู่ **${grade}/${room}** ครับ ✅\nกรุณาเลือกหัวข้อที่ต้องการประเมินครับ`);
+            delay(300).then(()=>addGrid('topic',CURRICULUM[grade]||[],topic=>{
+              selectedTopic=topic;addMsg('user',topic.topic);
+              delay(400).then(()=>{
+                addMsg('ai',`หัวข้อ **${topic.topic}** ประกอบด้วยเนื้อหาย่อยดังต่อไปนี้ครับ\nกรุณาเลือกหัวข้อย่อยที่ต้องการประเมิน 👇`);
+                delay(300).then(()=>addGrid('subtopic',topic.subs,sub=>{
+                  selectedSubtopic=sub;addMsg('user',sub);startQuiz();
+                }));
+              });
             }));
           });
         }));
